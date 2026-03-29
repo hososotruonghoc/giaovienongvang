@@ -73,14 +73,30 @@ h1,h2,h3,.hd{font-family:var(--fd);font-weight:800;}button{cursor:pointer;border
 .guide-step-body .guide-img{width:100%;border-radius:12px;border:2px solid var(--g200);margin:10px 0;overflow:hidden;}
 .guide-note{padding:10px 14px;border-radius:10px;background:var(--a50);border:1px solid var(--a200);font-size:12px;font-weight:600;color:var(--a600);margin-top:8px;}
 .guide-ai-note{padding:10px 14px;border-radius:10px;background:var(--t50);border:1px solid var(--t200);font-size:12px;font-weight:700;color:var(--t600);margin-top:8px;}
+
+.sum-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px;}
+.sum-table th{background:var(--g600);color:white;padding:10px 8px;font-weight:700;text-align:center;border:1px solid var(--g700);}
+.sum-table td{padding:8px;border:1px solid var(--g200);text-align:center;}
+.sum-table tr:nth-child(even) td{background:var(--g50);}
+.sum-table tr:hover td{background:var(--g100);}
+.sum-table .name-col{text-align:left;font-weight:700;}
+.grade-gioi{background:var(--g100);color:var(--g700);font-weight:800;padding:2px 8px;border-radius:6px;font-size:11px;}
+.grade-kha{background:var(--s100);color:var(--s500);font-weight:800;padding:2px 8px;border-radius:6px;font-size:11px;}
+.grade-tb{background:var(--a50);color:var(--a600);font-weight:800;padding:2px 8px;border-radius:6px;font-size:11px;}
+.grade-yeu{background:var(--r50);color:var(--r500);font-weight:800;padding:2px 8px;border-radius:6px;font-size:11px;}
+.sum-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+.sum-stat{padding:16px;border-radius:14px;text-align:center;border:2px solid;}
+.sum-stat .num{font-size:28px;font-weight:900;font-family:var(--fd);}
+.sum-stat .lbl{font-size:11px;font-weight:700;margin-top:2px;}
+@media print{.nav-bar,.topbar,.deco,.toast,.btn-save,.no-print{display:none!important;}.teacher-wrap{background:white!important;}body{background:white!important;}}
 .hidden{display:none !important;}.spinner{animation:spin 1s linear infinite;display:inline-block;}
 .toast{position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:100;padding:14px 28px;border-radius:14px;background:var(--g500);color:white;font-weight:800;font-size:15px;box-shadow:0 8px 30px rgba(16,185,129,.4);animation:slideUp .4s ease-out;}
 </style>
 </head>
 <body>
 <div class="deco"><div style="top:10px;left:8px;animation:floatBee 4s ease-in-out infinite" id="d1"></div><div style="bottom:80px;right:40px;animation:floatBee 5s ease-in-out infinite 2s" id="d2"></div><div style="top:50%;left:5%;font-size:18px;opacity:.35">🌸</div><div style="top:60px;left:20%;font-size:40px;opacity:.12">☁️</div><div style="bottom:40px;left:30%;font-size:20px;opacity:.4">🌼</div></div>
-<nav class="nav-bar"><div id="nb" style="animation:wiggle 2s ease-in-out infinite"></div><div class="nav-tabs"><button class="nav-tab active" data-tab="teacher"><span>📝</span><span>Tạo Đề Thi</span></button><button class="nav-tab" data-tab="grading"><span>✅</span><span>Chấm Bài</span></button></div></nav>
-<div id="tab-teacher"></div><div id="tab-grading" class="hidden"></div>
+<nav class="nav-bar"><div id="nb" style="animation:wiggle 2s ease-in-out infinite"></div><div class="nav-tabs"><button class="nav-tab active" data-tab="teacher"><span>📝</span><span>Tạo Đề Thi</span></button><button class="nav-tab" data-tab="grading"><span>✅</span><span>Chấm Bài</span></button><button class="nav-tab" data-tab="summary"><span>📊</span><span>Tổng Hợp</span></button></div></nav>
+<div id="tab-teacher"></div><div id="tab-grading" class="hidden"></div><div id="tab-summary" class="hidden"></div>
 <div id="guide-modal" class="hidden"></div>
 <div id="toast" class="toast hidden"></div>
 <script>
@@ -125,7 +141,7 @@ function uploadQImg(idx){
 }
 
 document.getElementById('d1').innerHTML=B(34);document.getElementById('d2').innerHTML=B(26);document.getElementById('nb').innerHTML=B(30);
-document.querySelectorAll('.nav-tab').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.nav-tab').forEach(function(x){x.classList.remove('active');});b.classList.add('active');['teacher','grading'].forEach(function(t){document.getElementById('tab-'+t).classList.toggle('hidden',t!==b.dataset.tab);});if(b.dataset.tab==='teacher')renderT();if(b.dataset.tab==='grading')renderG();});});
+document.querySelectorAll('.nav-tab').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.nav-tab').forEach(function(x){x.classList.remove('active');});b.classList.add('active');['teacher','grading','summary'].forEach(function(t){document.getElementById('tab-'+t).classList.toggle('hidden',t!==b.dataset.tab);});if(b.dataset.tab==='teacher')renderT();if(b.dataset.tab==='grading')renderG();if(b.dataset.tab==='summary')renderSummary();});});
 
 var CFG={schoolName:"Trường Tiểu Học Diễn Liên",teacherName:"Cô Nguyễn Thị Hoa",subject:"Toán",grade:3,semester:"Cuối năm học",schoolYear:"2025 - 2026",duration:2400,totalPoints:10};
 var students=[{stt:1,maHS:'HS001',hoTen:'Nguyễn Văn An',ngaySinh:'15/03/2017',lop:'3A',truong:'TH Diễn Liên'},{stt:2,maHS:'HS002',hoTen:'Trần Thị Bình',ngaySinh:'22/07/2017',lop:'3A',truong:'TH Diễn Liên'},{stt:3,maHS:'HS003',hoTen:'Lê Hoàng Minh',ngaySinh:'01/11/2017',lop:'3B',truong:'TH Diễn Liên'},{stt:4,maHS:'HS004',hoTen:'Phạm Thị Mai',ngaySinh:'30/05/2017',lop:'3B',truong:'TH Diễn Liên'},{stt:5,maHS:'HS005',hoTen:'Hoàng Đức Anh',ngaySinh:'08/09/2017',lop:'3A',truong:'TH Diễn Liên'}];
@@ -240,6 +256,83 @@ function showGuide(){
 }
 
 function closeGuide(){document.getElementById('guide-modal').classList.add('hidden');}
+
+
+var SUM={results:[],loading:false,roomCode:'',examInfo:null};
+
+function renderSummary(){
+  var el=document.getElementById('tab-summary');
+  if(!SUM.results.length&&!SUM.loading){
+    el.innerHTML='<div class="teacher-wrap"><div class="topbar"><div class="topbar-inner"><div class="topbar-left"><div class="topbar-icon">📊</div><div><h1 class="hd" style="font-size:20px;color:var(--g800)">Tổng Hợp Kết Quả</h1><p style="font-size:13px;font-weight:600;color:var(--g700)">Bảng điểm & Thống kê</p></div></div></div></div><div style="max-width:600px;margin:0 auto;padding:40px;text-align:center"><div style="animation:floatBee 3s ease-in-out infinite;display:flex;justify-content:center;margin-bottom:16px;opacity:.5">'+B(64)+'</div><p style="font-size:14px;font-weight:700;color:var(--g600);margin-bottom:16px">Nhập mã phòng thi để xem bảng điểm:</p><input style="width:100%;padding:16px;border:3px solid var(--g300);border-radius:14px;font-size:24px;font-weight:900;text-align:center;font-family:var(--fd);letter-spacing:4px;color:var(--g700);text-transform:uppercase" id="sum-code" placeholder="ONG-0000" value="'+(T.roomCode||SUM.roomCode||'')+'"><button class="btn-save" style="margin-top:12px;width:100%;justify-content:center;padding:14px" onclick="loadSummary()">📊 Xem bảng điểm</button></div></div>';
+    return;
+  }
+  if(SUM.loading){el.innerHTML='<div class="teacher-wrap"><div style="padding:60px;text-align:center"><span class="spinner">⏳</span> Đang tải...</div></div>';return;}
+  
+  // Calculate stats
+  var total=SUM.results.length;
+  var scores=SUM.results.map(function(r){return r.total||r.tnScore||0;});
+  var avg=total?scores.reduce(function(a,b){return a+b;},0)/total:0;
+  var max=total?Math.max.apply(null,scores):0;
+  var min=total?Math.min.apply(null,scores):0;
+  var gioi=scores.filter(function(s){return s>=9;}).length;
+  var kha=scores.filter(function(s){return s>=7&&s<9;}).length;
+  var tb=scores.filter(function(s){return s>=5&&s<7;}).length;
+  var yeu=scores.filter(function(s){return s<5;}).length;
+
+  var rows=SUM.results.map(function(r,i){
+    var sc=r.total||r.tnScore||0;
+    var grade=sc>=9?'Giỏi':sc>=7?'Khá':sc>=5?'TB':'Yếu';
+    var gcls=sc>=9?'grade-gioi':sc>=7?'grade-kha':sc>=5?'grade-tb':'grade-yeu';
+    return'<tr><td>'+(i+1)+'</td><td class="name-col">'+r.hoTen+'</td><td>'+r.maHS+'</td><td>'+r.lop+'</td><td><b>'+r.tnScore+'</b>/'+r.tnTotal+'</td><td>'+(r.tnDetail||'—').replace(/\\|/g,' ')+'</td><td>'+(r.tlScore||'Chưa chấm')+'</td><td><b>'+sc+'</b></td><td><span class="'+gcls+'">'+grade+'</span></td><td style="font-size:10px">'+r.time+'</td></tr>';
+  }).join('');
+
+  el.innerHTML='<div class="teacher-wrap"><div class="topbar no-print"><div class="topbar-inner"><div class="topbar-left"><div class="topbar-icon">📊</div><div><h1 class="hd" style="font-size:20px;color:var(--g800)">Tổng Hợp — <span style="color:var(--t600)">'+SUM.roomCode+'</span></h1><p style="font-size:13px;font-weight:600;color:var(--g600)">'+(SUM.results[0]?SUM.results[0].school||'':'')+' — '+total+' bài</p></div></div><div style="display:flex;gap:8px"><button class="btn-save" onclick="loadSummary()">🔄 Tải lại</button><button style="display:flex;align-items:center;gap:8px;padding:10px 20px;font-weight:800;color:white;border-radius:12px;background:linear-gradient(135deg,#6366F1,#8B5CF6)" onclick="printSummary()">📄 Tải PDF</button></div></div></div>'+
+  '<div style="max-width:1100px;margin:0 auto;padding:24px" id="sum-content">'+
+  // Print header (hidden on screen, shown on print)
+  '<div style="display:none;text-align:center;margin-bottom:20px" id="print-header"><h2 style="font-size:18px;color:#047857;margin-bottom:4px">'+(SUM.results[0]?SUM.results[0].school||CFG.schoolName:'')+'</h2><h3 style="font-size:16px;color:#065F46">BẢNG TỔNG HỢP KẾT QUẢ KIỂM TRA</h3><p style="font-size:12px;color:#6B7280">Mã phòng: '+SUM.roomCode+' — Ngày in: '+new Date().toLocaleDateString("vi-VN")+'</p></div>'+
+  // Stats cards
+  '<div class="sum-stats no-print">'+
+  '<div class="sum-stat" style="background:var(--g50);border-color:var(--g200)"><div class="num" style="color:var(--g700)">'+total+'</div><div class="lbl" style="color:var(--g600)">Tổng bài</div></div>'+
+  '<div class="sum-stat" style="background:var(--t50);border-color:var(--t200)"><div class="num" style="color:var(--t600)">'+avg.toFixed(1)+'</div><div class="lbl" style="color:var(--t600)">Điểm TB</div></div>'+
+  '<div class="sum-stat" style="background:var(--s50);border-color:var(--s100)"><div class="num" style="color:var(--s500)">'+max+'</div><div class="lbl" style="color:var(--s500)">Cao nhất</div></div>'+
+  '<div class="sum-stat" style="background:var(--a50);border-color:var(--a200)"><div class="num" style="color:var(--a600)">'+min+'</div><div class="lbl" style="color:var(--a600)">Thấp nhất</div></div>'+
+  '</div>'+
+  // Grade distribution
+  '<div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap" class="no-print">'+
+  '<div style="flex:1;min-width:100px;padding:10px;background:var(--g100);border-radius:10px;text-align:center"><div style="font-size:20px;font-weight:900;font-family:var(--fd);color:var(--g700)">'+gioi+'</div><div style="font-size:11px;font-weight:700;color:var(--g600)">Giỏi (≥9)</div></div>'+
+  '<div style="flex:1;min-width:100px;padding:10px;background:var(--s100);border-radius:10px;text-align:center"><div style="font-size:20px;font-weight:900;font-family:var(--fd);color:var(--s500)">'+kha+'</div><div style="font-size:11px;font-weight:700;color:var(--s500)">Khá (7-8.9)</div></div>'+
+  '<div style="flex:1;min-width:100px;padding:10px;background:var(--a50);border-radius:10px;text-align:center"><div style="font-size:20px;font-weight:900;font-family:var(--fd);color:var(--a600)">'+tb+'</div><div style="font-size:11px;font-weight:700;color:var(--a600)">TB (5-6.9)</div></div>'+
+  '<div style="flex:1;min-width:100px;padding:10px;background:var(--r50);border-radius:10px;text-align:center"><div style="font-size:20px;font-weight:900;font-family:var(--fd);color:var(--r500)">'+yeu+'</div><div style="font-size:11px;font-weight:700;color:var(--r500)">Yếu (<5)</div></div>'+
+  '</div>'+
+  // Table
+  '<div class="panel" style="padding:16px;overflow-x:auto"><table class="sum-table"><thead><tr><th>TT</th><th>Họ và tên</th><th>Mã HS</th><th>Lớp</th><th>Điểm TN</th><th>Chi tiết TN</th><th>Điểm TL</th><th>Tổng</th><th>Xếp loại</th><th>Thời gian</th></tr></thead><tbody>'+rows+'</tbody>'+
+  '<tfoot><tr style="background:var(--g50);font-weight:800"><td colspan="4" style="text-align:right;border:1px solid var(--g200)">THỐNG KÊ:</td><td colspan="2" style="border:1px solid var(--g200)">TB: '+avg.toFixed(1)+'</td><td style="border:1px solid var(--g200)"></td><td style="border:1px solid var(--g200)">Cao: '+max+'</td><td style="border:1px solid var(--g200)">Thấp: '+min+'</td><td style="border:1px solid var(--g200)">'+total+' bài</td></tr></tfoot>'+
+  '</table></div>'+
+  // Signature area for print
+  '<div style="display:none;margin-top:30px;display:flex;justify-content:space-between" id="print-sign"><div style="text-align:center"><p style="font-size:12px;font-weight:600">Người lập</p><p style="font-size:11px;color:#6B7280;margin-top:40px">'+CFG.teacherName+'</p></div><div style="text-align:center"><p style="font-size:12px;font-weight:600">Hiệu trưởng</p><p style="font-size:11px;color:#6B7280;margin-top:40px">(Ký, đóng dấu)</p></div></div>'+
+  '</div></div>';
+}
+
+function loadSummary(){
+  var code=document.getElementById('sum-code')?document.getElementById('sum-code').value.trim().toUpperCase():(T.roomCode||SUM.roomCode);
+  if(!code){showToast('⚠️ Nhập mã phòng!');return;}
+  SUM.roomCode=code;SUM.loading=true;renderSummary();
+  fetch(API+'?action=getResults&code='+encodeURIComponent(code)).then(function(r){return r.json();}).then(function(data){
+    SUM.results=Array.isArray(data)?data:[];SUM.loading=false;
+    if(!SUM.results.length)showToast('📭 Chưa có bài nộp cho mã '+code);
+    else showToast('📊 '+SUM.results.length+' kết quả');
+    renderSummary();
+  }).catch(function(err){SUM.loading=false;renderSummary();showToast('⚠️ '+err.message);});
+}
+
+function printSummary(){
+  // Show print elements
+  var ph=document.getElementById('print-header');if(ph)ph.style.display='block';
+  var ps=document.getElementById('print-sign');if(ps)ps.style.display='flex';
+  window.print();
+  // Hide after print
+  setTimeout(function(){if(ph)ph.style.display='none';if(ps)ps.style.display='none';},1000);
+}
 
 function renderT(){
   var el=document.getElementById('tab-teacher');
