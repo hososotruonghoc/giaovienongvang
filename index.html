@@ -146,7 +146,7 @@ document.querySelectorAll('.nav-tab').forEach(function(b){b.addEventListener('cl
 var CFG={schoolName:"Trường Tiểu Học Diễn Liên",teacherName:"Cô Nguyễn Thị Hoa",subject:"Toán",grade:3,semester:"Cuối năm học",schoolYear:"2025 - 2026",duration:2400,totalPoints:10};
 var students=[{stt:1,maHS:'HS001',hoTen:'Nguyễn Văn An',ngaySinh:'15/03/2017',lop:'3A',truong:'TH Diễn Liên'},{stt:2,maHS:'HS002',hoTen:'Trần Thị Bình',ngaySinh:'22/07/2017',lop:'3A',truong:'TH Diễn Liên'},{stt:3,maHS:'HS003',hoTen:'Lê Hoàng Minh',ngaySinh:'01/11/2017',lop:'3B',truong:'TH Diễn Liên'},{stt:4,maHS:'HS004',hoTen:'Phạm Thị Mai',ngaySinh:'30/05/2017',lop:'3B',truong:'TH Diễn Liên'},{stt:5,maHS:'HS005',hoTen:'Hoàng Đức Anh',ngaySinh:'08/09/2017',lop:'3A',truong:'TH Diễn Liên'}];
 var canned=["Em làm rất tốt! 🌟","Chú ý lỗi chính tả!","Cần trình bày sạch hơn!","Phép tính đúng! 🐝","Viết đầy đủ lời giải nhé!","Xem lại đáp số.","Cố gắng hơn! 💪","Xuất sắc! 🏆"];
-var T={file:null,fileObj:null,parsed:false,examData:null,editingQ:null,saving:false,saved:false,showAddStudent:false,roomCode:null};
+var T={file:null,fileObj:null,parsed:false,examData:null,editingQ:null,saving:false,saved:false,showAddStudent:false,roomCode:null,uploadFile:null,uploadObj:null,aiParsing:false,aiStatus:null,aiMsg:''};
 
 function addQ(type){
   if(!T.examData)T.examData={examId:'exam_'+Date.now(),title:'Kiểm Tra '+CFG.semester+' - '+CFG.subject+' Lớp '+CFG.grade,questions:[]};
@@ -162,6 +162,64 @@ function addQ(type){
 function deleteQ(idx){if(!T.examData)return;T.examData.questions.splice(idx,1);T.examData.questions.forEach(function(q,i){q.order=i+1;q.id='q'+(i+1);});if(!T.examData.questions.length)T.parsed=false;T.roomCode=null;renderT();}
 function moveQ(idx,dir){if(!T.examData)return;var qs=T.examData.questions,ni=idx+dir;if(ni<0||ni>=qs.length)return;var tmp=qs[idx];qs[idx]=qs[ni];qs[ni]=tmp;qs.forEach(function(q,i){q.order=i+1;q.id='q'+(i+1);});renderT();}
 function addNewStudent(){var ma=document.getElementById('add-ma').value,ten=document.getElementById('add-ten').value,ns=document.getElementById('add-ns').value,lop=document.getElementById('add-lop').value,truong=document.getElementById('add-truong').value;if(!ma||!ten){showToast('⚠️ Nhập Mã HS và Họ tên!');return;}students.push({stt:students.length+1,maHS:ma,hoTen:ten,ngaySinh:ns||'',lop:lop||'',truong:truong||'TH Diễn Liên'});T.showAddStudent=false;showToast('✅ Đã thêm: '+ten);renderT();}
+
+
+function trigUpload(){
+  var inp=document.createElement('input');inp.type='file';inp.accept='.pdf,.png,.jpg,.jpeg,.doc,.docx';
+  inp.onchange=function(e){
+    var f=e.target.files[0];if(!f)return;
+    if(f.size>10*1024*1024){showToast('⚠️ File quá lớn! Tối đa 10MB');return;}
+    T.uploadFile={name:f.name,size:f.size};T.uploadObj=f;T.aiStatus=null;T.aiMsg='';renderT();
+    showToast('📄 Đã tải: '+f.name);
+  };inp.click();
+}
+function handleDrop(e){
+  var f=e.dataTransfer.files[0];if(!f)return;
+  T.uploadFile={name:f.name,size:f.size};T.uploadObj=f;T.aiStatus=null;renderT();
+}
+function parseWithAI(){
+  if(!T.uploadObj){showToast('⚠️ Chưa tải file!');return;}
+  T.aiParsing=true;T.aiStatus='parsing';T.aiMsg='Đang phân tích...';renderT();
+  
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var base64=e.target.result.split(',')[1];
+    var ext=T.uploadFile.name.split('.').pop().toLowerCase();
+    var mtype='image/png';
+    if(ext==='pdf')mtype='application/pdf';
+    else if(ext==='jpg'||ext==='jpeg')mtype='image/jpeg';
+    else if(ext==='png')mtype='image/png';
+    
+    fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'parseExam',fileBase64:base64,mediaType:mtype,fileName:T.uploadFile.name})
+    }).then(function(r){return r.json();}).then(function(data){
+      T.aiParsing=false;
+      if(data.error){
+        T.aiStatus='error';
+        if(data.error.indexOf('429')>=0||data.error.indexOf('quota')>=0||data.error.indexOf('Quota')>=0){
+          T.aiMsg='⏳ AI đang bận, thử lại sau 1 phút';
+        }else{
+          T.aiMsg=data.error;
+        }
+        renderT();return;
+      }
+      if(!data.questions||!data.questions.length){
+        T.aiStatus='error';T.aiMsg='Không tìm thấy câu hỏi trong file';renderT();return;
+      }
+      // Success! Populate exam
+      T.examData={examId:'exam_ai_'+Date.now(),title:data.title||('KT '+CFG.semester+' - '+CFG.subject+' Lớp '+CFG.grade),questions:data.questions};
+      if(data.subject)CFG.subject=data.subject;
+      if(data.grade)CFG.grade=data.grade;
+      T.parsed=true;T.roomCode=null;
+      T.aiStatus='success';T.aiMsg='✅ '+data.questions.length+' câu hỏi!';
+      showToast('🐝 Ong vàng đã phân tích thành công '+data.questions.length+' câu!');
+      renderT();
+    }).catch(function(err){
+      T.aiParsing=false;T.aiStatus='error';T.aiMsg='Lỗi kết nối: '+err.message;renderT();
+    });
+  };
+  reader.readAsDataURL(T.uploadObj);
+}
 
 function publishExam(){
   if(!T.examData||!T.examData.questions.length){showToast('⚠️ Chưa có câu hỏi!');return;}
@@ -238,7 +296,7 @@ function showGuide(){
 
   // STEP 6 - AI
   '<div class="guide-step" style="border-color:var(--t200)"><div class="guide-step-header" style="background:var(--t50)"><div class="guide-step-num" style="background:var(--t500)">🤖</div><div class="guide-step-title" style="color:var(--t600)">AI Ong Vàng (Phiên bản sau)</div></div><div class="guide-step-body">'+
-  '<div class="guide-img"><svg width="100%" viewBox="0 0 600 100" xmlns="http://www.w3.org/2000/svg"><rect width="600" height="100" fill="#F0FDFA" rx="8"/><rect x="30" y="15" width="250" height="70" rx="12" fill="white" stroke="#99F6E4" stroke-width="2" stroke-dasharray="6 3"/><text x="55" y="40" font-size="12" font-weight="700" fill="#0D9488">📤 Tải file đề thi</text><text x="55" y="58" font-size="10" fill="#6B7280">AI tự đọc PDF/ảnh → tạo câu hỏi</text><text x="55" y="74" font-size="9" fill="#0D9488" font-style="italic">🐝 Sẽ cập nhật ở phiên bản sau</text><rect x="320" y="15" width="250" height="70" rx="12" fill="white" stroke="#99F6E4" stroke-width="2" stroke-dasharray="6 3"/><text x="345" y="40" font-size="12" font-weight="700" fill="#0D9488">🤖 AI chấm bài tự luận</text><text x="345" y="58" font-size="10" fill="#6B7280">AI đọc bài HS → cho điểm + nhận xét</text><text x="345" y="74" font-size="9" fill="#0D9488" font-style="italic">🐝 Sẽ cập nhật ở phiên bản sau</text></svg></div>'+
+  '<div class="guide-img"><svg width="100%" viewBox="0 0 600 100" xmlns="http://www.w3.org/2000/svg"><rect width="600" height="100" fill="#F0FDFA" rx="8"/><rect x="30" y="15" width="250" height="70" rx="12" fill="white" stroke="#99F6E4" stroke-width="2" stroke-dasharray="6 3"/><text x="55" y="40" font-size="12" font-weight="700" fill="#0D9488">📤 Tải file đề thi</text><text x="55" y="58" font-size="10" fill="#6B7280">AI tự đọc PDF/ảnh → tạo câu hỏi</text><text x="55" y="74" font-size="9" fill="#0D9488" font-style="italic">🐝 Đã sẵn sàng — tải file lên để thử!</text><rect x="320" y="15" width="250" height="70" rx="12" fill="white" stroke="#99F6E4" stroke-width="2" stroke-dasharray="6 3"/><text x="345" y="40" font-size="12" font-weight="700" fill="#0D9488">🤖 AI chấm bài tự luận</text><text x="345" y="58" font-size="10" fill="#6B7280">AI đọc bài HS → cho điểm + nhận xét</text><text x="345" y="74" font-size="9" fill="#0D9488" font-style="italic">🐝 Đã sẵn sàng — tải file lên để thử!</text></svg></div>'+
   '<p><b>2 tính năng AI đang phát triển:</b></p>'+
   '<p>🔹 <b>AI đọc đề thi:</b> Tải ảnh chụp/PDF đề thi → Ong vàng AI tự nhận diện câu hỏi, phân loại MCQ/Đúng-Sai/Điền khuyết/Tự luận, tạo đáp án.</p>'+
   '<p>🔹 <b>AI chấm bài tự luận:</b> AI đọc bài làm HS → tự cho điểm theo rubric → viết nhận xét.</p>'+
@@ -354,7 +412,7 @@ function renderT(){
   '<div class="panel" style="margin-top:16px"><div class="panel-title">✏️ Biên soạn đề thi</div><div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap"><button style="padding:10px 16px;border-radius:10px;font-weight:800;font-size:12px;color:white;background:linear-gradient(135deg,var(--g500),var(--t500))" onclick="addQ(\'mcq\')">➕ Chọn ĐA</button><button style="padding:10px 16px;border-radius:10px;font-weight:800;font-size:12px;color:white;background:linear-gradient(135deg,var(--t500),var(--s500))" onclick="addQ(\'true_false\')">➕ Đúng/Sai</button><button style="padding:10px 16px;border-radius:10px;font-weight:800;font-size:12px;color:white;background:linear-gradient(135deg,var(--s500),#6366F1)" onclick="addQ(\'fill_in\')">➕ Điền khuyết</button><button style="padding:10px 16px;border-radius:10px;font-weight:800;font-size:12px;color:white;background:linear-gradient(135deg,#EC4899,#F43F5E)" onclick="addQ(\'essay\')">➕ Tự luận</button></div>'+
   (T.examData&&T.examData.questions.length?'<div style="padding:10px 14px;background:var(--g50);border-radius:10px;border:1px solid var(--g200);font-size:13px;font-weight:700;color:var(--g700)">📋 '+T.examData.questions.length+' câu | TN: '+T.examData.questions.filter(function(q){return q.cat==="tn";}).length+' | TL: '+T.examData.questions.filter(function(q){return q.cat==="tl";}).length+' | Tổng: '+T.examData.questions.reduce(function(s,q){return s+q.points;},0)+'đ</div>':'<div style="padding:14px;background:var(--a50);border-radius:10px;border:1px solid var(--a200);text-align:center;font-size:13px;font-weight:700;color:var(--a600)">💡 Bấm các nút trên để thêm câu hỏi</div>')+
   '</div>'+
-  '<div class="panel" style="margin-top:16px"><div class="panel-title">📤 Tải file đề thi</div><div style="border:3px dashed var(--g300);border-radius:16px;padding:30px;text-align:center;cursor:pointer;background:var(--g50)" onclick="showToast(\'🐝 Tính năng AI đọc đề thi đang được cập nhật ở phiên bản sau!\')"><div style="font-size:48px;margin-bottom:10px">📎</div><p style="font-size:17px;font-weight:700;color:var(--g700)">Kéo thả file vào đây</p><p style="font-size:13px;font-weight:600;color:var(--g600)">PDF hoặc Ảnh chụp đề (PNG, JPG)</p></div><p style="font-size:11px;color:var(--g600);margin-top:8px;font-weight:600">🐝 Ong vàng AI sẽ đọc file và tự động tạo câu hỏi (phiên bản sau)</p></div>'+
+  '<div class="panel" style="margin-top:16px"><div class="panel-title">🧠 AI Biên Soạn Đề'+(T.aiStatus?'<span style="margin-left:auto;font-size:11px;font-weight:700;padding:3px 10px;border-radius:8px;'+(T.aiStatus==='success'?'background:var(--g100);color:var(--g700)':T.aiStatus==='error'?'background:var(--r50);color:var(--r500)':'background:var(--a50);color:var(--a600)')+'">'+T.aiMsg+'</span>':'')+'</div><div style="border:3px dashed '+(T.uploadFile?'var(--t400)':'var(--g300)')+';border-radius:16px;padding:'+(T.uploadFile?'20px':'30px')+';text-align:center;cursor:pointer;background:'+(T.uploadFile?'var(--t50)':'var(--g50)')+';transition:all .3s" onclick="trigUpload()" ondragover="event.preventDefault()" ondrop="event.preventDefault();handleDrop(event)">'+(T.uploadFile?'<div style="font-size:40px;margin-bottom:8px">📄</div><p style="font-size:16px;font-weight:800;color:var(--t600)">'+T.uploadFile.name+'</p><p style="font-size:12px;font-weight:600;color:var(--t500)">'+(T.uploadFile.size/1024).toFixed(0)+' KB</p><button style="margin-top:6px;color:var(--r400);font-size:12px;font-weight:700;background:none" onclick="event.stopPropagation();T.uploadFile=null;T.uploadObj=null;T.aiStatus=null;renderT();">✕ Xóa</button>':'<div style="font-size:48px;margin-bottom:10px">📎</div><p style="font-size:17px;font-weight:700;color:var(--g700)">Kéo thả file vào đây</p><p style="font-size:13px;font-weight:600;color:var(--g600)">PDF hoặc Ảnh chụp đề (PNG, JPG)</p>')+'</div>'+(T.uploadFile&&!T.aiParsing?'<button style="margin-top:10px;width:100%;padding:16px;border-radius:12px;font-size:16px;font-weight:800;color:white;display:flex;align-items:center;justify-content:center;gap:10px;background:linear-gradient(135deg,var(--g500),var(--t500));box-shadow:0 4px 16px rgba(16,185,129,.3)" onclick="parseWithAI()">🧠 Ong Vàng AI Phân Tích Đề</button>':'')+(T.aiParsing?'<div style="margin-top:10px;width:100%;padding:16px;border-radius:12px;font-size:16px;font-weight:800;color:white;display:flex;align-items:center;justify-content:center;gap:10px;background:linear-gradient(135deg,var(--g500),var(--t500));opacity:.7"><span class="spinner">⏳</span> Ong vàng đang đọc đề...</div>':'')+'<p style="font-size:11px;color:var(--g600);margin-top:8px;font-weight:600">🐝 AI đọc file đề → phân loại câu hỏi → tạo đáp án theo ma trận đề</p></div>'+
   '</div><div style="animation:fadeIn .6s ease-out"><div class="panel" style="min-height:400px"><div class="panel-title">👁️ Xem trước & Chỉnh sửa</div>'+(!T.parsed?'<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:250px;color:var(--g300)"><div style="animation:floatBee 3s ease-in-out infinite;opacity:.6">'+B(64)+'</div><p style="margin-top:16px;font-size:16px;font-weight:700">Thêm câu hỏi để bắt đầu</p></div>':'<div style="max-height:600px;overflow-y:auto;padding-right:8px">'+T.examData.questions.map(function(q,i){return rTQ(q,i);}).join('')+'</div>')+'</div></div></div></div>';
 }
 
