@@ -98,6 +98,7 @@ h1,h2,h3,.hd{font-family:var(--fd);font-weight:800;}button{cursor:pointer;border
 <nav class="nav-bar"><div id="nb" style="animation:wiggle 2s ease-in-out infinite"></div><div class="nav-tabs"><button class="nav-tab active" data-tab="teacher"><span>📝</span><span>Tạo Đề Thi</span></button><button class="nav-tab" data-tab="grading"><span>✅</span><span>Chấm Bài</span></button><button class="nav-tab" data-tab="summary"><span>📊</span><span>Tổng Hợp</span></button></div></nav>
 <div id="tab-teacher"></div><div id="tab-grading" class="hidden"></div><div id="tab-summary" class="hidden"></div>
 <div id="guide-modal" class="hidden"></div>
+<div id="import-modal" class="hidden"></div>
 <div id="toast" class="toast hidden"></div>
 <script>
 var API='https://script.google.com/macros/s/AKfycbyt6623ltT0g86V_cIxqFmtSAfCnVqKNq1O5Li5klICguuFtF_yEzcfIP-X3fvMVaI1/exec';
@@ -146,7 +147,30 @@ document.querySelectorAll('.nav-tab').forEach(function(b){b.addEventListener('cl
 var CFG={schoolName:"Trường Tiểu Học Diễn Liên",teacherName:"Cô Nguyễn Thị Hoa",subject:"Toán",grade:3,semester:"Cuối năm học",schoolYear:"2025 - 2026",duration:2400,totalPoints:10};
 var students=[{stt:1,maHS:'HS001',hoTen:'Nguyễn Văn An',ngaySinh:'15/03/2017',lop:'3A',truong:'TH Diễn Liên'},{stt:2,maHS:'HS002',hoTen:'Trần Thị Bình',ngaySinh:'22/07/2017',lop:'3A',truong:'TH Diễn Liên'},{stt:3,maHS:'HS003',hoTen:'Lê Hoàng Minh',ngaySinh:'01/11/2017',lop:'3B',truong:'TH Diễn Liên'},{stt:4,maHS:'HS004',hoTen:'Phạm Thị Mai',ngaySinh:'30/05/2017',lop:'3B',truong:'TH Diễn Liên'},{stt:5,maHS:'HS005',hoTen:'Hoàng Đức Anh',ngaySinh:'08/09/2017',lop:'3A',truong:'TH Diễn Liên'}];
 var canned=["Em làm rất tốt! 🌟","Chú ý lỗi chính tả!","Cần trình bày sạch hơn!","Phép tính đúng! 🐝","Viết đầy đủ lời giải nhé!","Xem lại đáp số.","Cố gắng hơn! 💪","Xuất sắc! 🏆"];
-var T={file:null,fileObj:null,parsed:false,examData:null,editingQ:null,saving:false,saved:false,showAddStudent:false,roomCode:null,uploadFile:null,uploadObj:null,aiParsing:false,aiStatus:null,aiMsg:''};
+var T={file:null,fileObj:null,parsed:false,examData:null,editingQ:null,saving:false,saved:false,showAddStudent:false,roomCode:null,uploadFile:null,uploadObj:null,aiParsing:false,aiStatus:null,aiMsg:'',previewFile:null,previewData:null,previewType:null};
+
+
+function showImportModal(){
+  var el=document.getElementById('import-modal');
+  el.classList.remove('hidden');
+  el.innerHTML='<div class="import-overlay" onclick="if(event.target===this)closeImport()"><div class="import-modal"><h2>📥 Nhập Đề Từ AI</h2><p style="font-size:13px;font-weight:600;color:var(--x500);margin-bottom:12px">Mở file <b>AI_BienSoanDe.html</b> trên Claude.ai → upload đề → AI phân tích → copy mã → dán vào đây:</p><textarea class="import-textarea" id="import-data" placeholder="Dán mã đề thi JSON vào đây..."></textarea><div style="display:flex;gap:8px;margin-top:12px"><button style="flex:1;padding:12px;border-radius:10px;font-weight:800;color:white;background:linear-gradient(135deg,var(--g500),var(--t500));border:none;font-size:14px;cursor:pointer" onclick="importFromAI()">📥 Nhập Đề</button><button style="padding:12px 20px;border-radius:10px;font-weight:700;color:var(--x500);background:var(--x100);border:none;cursor:pointer" onclick="closeImport()">Hủy</button></div></div></div>';
+}
+function closeImport(){document.getElementById('import-modal').classList.add('hidden');}
+function importFromAI(){
+  var raw=document.getElementById('import-data').value.trim();
+  if(!raw){showToast('⚠️ Dán mã đề thi vào!');return;}
+  try{
+    var data=JSON.parse(raw);
+    if(!data.questions||!data.questions.length)throw new Error('Không có câu hỏi');
+    T.examData={examId:'exam_ai_'+Date.now(),title:data.title||('KT '+CFG.semester+' - '+CFG.subject+' Lớp '+CFG.grade),questions:data.questions};
+    if(data.subject)CFG.subject=data.subject;
+    if(data.grade)CFG.grade=data.grade;
+    T.parsed=true;T.roomCode=null;
+    closeImport();
+    showToast('✅ Đã nhập '+data.questions.length+' câu hỏi! GV kiểm tra và chỉnh sửa.');
+    renderT();
+  }catch(e){showToast('❌ Mã không hợp lệ: '+e.message);}
+}
 
 function addQ(type){
   if(!T.examData)T.examData={examId:'exam_'+Date.now(),title:'Kiểm Tra '+CFG.semester+' - '+CFG.subject+' Lớp '+CFG.grade,questions:[]};
@@ -163,6 +187,160 @@ function deleteQ(idx){if(!T.examData)return;T.examData.questions.splice(idx,1);T
 function moveQ(idx,dir){if(!T.examData)return;var qs=T.examData.questions,ni=idx+dir;if(ni<0||ni>=qs.length)return;var tmp=qs[idx];qs[idx]=qs[ni];qs[ni]=tmp;qs.forEach(function(q,i){q.order=i+1;q.id='q'+(i+1);});renderT();}
 function addNewStudent(){var ma=document.getElementById('add-ma').value,ten=document.getElementById('add-ten').value,ns=document.getElementById('add-ns').value,lop=document.getElementById('add-lop').value,truong=document.getElementById('add-truong').value;if(!ma||!ten){showToast('⚠️ Nhập Mã HS và Họ tên!');return;}students.push({stt:students.length+1,maHS:ma,hoTen:ten,ngaySinh:ns||'',lop:lop||'',truong:truong||'TH Diễn Liên'});T.showAddStudent=false;showToast('✅ Đã thêm: '+ten);renderT();}
 
+
+
+
+
+function importExamJSON(){
+  var raw=document.getElementById('import-json').value.trim();
+  if(!raw){showToast('⚠️ Dán JSON đề thi vào ô trước!');return;}
+  try{
+    // Try to find JSON in the text
+    var jsonStart=raw.indexOf('{');var jsonEnd=raw.lastIndexOf('}');
+    if(jsonStart>=0&&jsonEnd>jsonStart)raw=raw.substring(jsonStart,jsonEnd+1);
+    var data=JSON.parse(raw);
+    if(!data.questions||!data.questions.length){showToast('⚠️ Không tìm thấy câu hỏi trong JSON');return;}
+    T.examData={examId:'exam_import_'+Date.now(),title:data.title||('KT '+CFG.semester+' - '+CFG.subject+' Lớp '+CFG.grade),questions:data.questions};
+    if(data.subject)CFG.subject=data.subject;
+    if(data.grade)CFG.grade=data.grade;
+    T.parsed=true;T.roomCode=null;
+    showToast('✅ Đã import '+data.questions.length+' câu hỏi! Kiểm tra lại đáp án & điểm.');
+    document.getElementById('import-json').value='';
+    renderT();
+  }catch(e){showToast('⚠️ JSON không hợp lệ: '+e.message);}
+}
+
+function uploadPreview(){
+  var inp=document.createElement('input');inp.type='file';inp.accept='.pdf,.png,.jpg,.jpeg';
+  inp.onchange=function(e){
+    var f=e.target.files[0];if(!f)return;
+    if(f.size>15*1024*1024){showToast('⚠️ File quá lớn! Tối đa 15MB');return;}
+    T.previewFile={name:f.name,size:f.size};
+    var ext=f.name.split('.').pop().toLowerCase();
+    T.previewType=ext==='pdf'?'pdf':'image';
+    var reader=new FileReader();
+    reader.onload=function(e){T.previewData=e.target.result;renderT();showToast('📄 Đã tải: '+f.name+' — Xem đề gốc và soạn câu hỏi!');};
+    reader.readAsDataURL(f);
+  };inp.click();
+}
+
+function parseFromText(){
+  var raw=document.getElementById('paste-exam').value.trim();
+  if(!raw||raw.length<20){showToast('⚠️ Dán nội dung đề thi vào ô trước!');return;}
+  
+  var lines=raw.split('\n').map(function(l){return l.trim();}).filter(function(l){return l.length>0;});
+  var questions=[];
+  var qNum=0;
+  
+  for(var i=0;i<lines.length;i++){
+    var line=lines[i];
+    
+    // Detect question start: "Câu 1:", "Câu 1.", "Câu 1)", "1.", "1:", "1)", "Bài 1", etc.
+    var qMatch=line.match(/^(?:C[aâ]u|B[àa]i|Question)?\s*(\d+)\s*[.:)]\s*(.*)/i);
+    if(!qMatch&&line.match(/^(?:C[aâ]u|B[àa]i)\s+(\d+)/i)){qMatch=line.match(/^(?:C[aâ]u|B[àa]i)\s+(\d+)\s*[.:)]?\s*(.*)/i);}
+    
+    if(qMatch){
+      qNum++;
+      var qContent=qMatch[2]||'';
+      var qId='q'+qNum;
+      
+      // Look ahead for options (A. B. C. D.) on same line or next lines
+      var options=[];
+      var optOnSameLine=qContent.match(/\bA[.)]\s*.+\bB[.)]\s*.+/i);
+      
+      // Check if options are on same line
+      if(optOnSameLine){
+        var optParts=qContent.match(/(.+?)\s*A[.)]\s*(.+?)\s*B[.)]\s*(.+?)(?:\s*C[.)]\s*(.+?))?(?:\s*D[.)]\s*(.+))?$/i);
+        if(optParts){
+          qContent=optParts[1].trim();
+          if(optParts[2])options.push({id:'a',text:optParts[2].trim()});
+          if(optParts[3])options.push({id:'b',text:optParts[3].trim()});
+          if(optParts[4])options.push({id:'c',text:optParts[4].trim()});
+          if(optParts[5])options.push({id:'d',text:optParts[5].trim()});
+        }
+      }
+      
+      // Check next lines for options
+      if(!options.length){
+        var j=i+1;
+        while(j<lines.length){
+          var optLine=lines[j];
+          var optMatch=optLine.match(/^([A-Da-d])[.)]\s*(.+)/);
+          if(optMatch){
+            options.push({id:optMatch[1].toLowerCase(),text:optMatch[2].trim()});
+            j++;
+          } else if(optLine.match(/^(?:C[aâ]u|B[àa]i|Question)?\s*\d+\s*[.:)]/i)){
+            break;
+          } else if(!qContent&&optLine.length>5){
+            // Content might be on next line
+            qContent=optLine;
+            j++;
+          } else {
+            // Could be continuation of question content
+            if(!options.length&&optLine.length>3){qContent+=' '+optLine;}
+            j++;
+          }
+        }
+        i=j-1;
+      }
+      
+      // Determine question type
+      var type='essay';var cat='tl';var pts=2;var correctAnswer='';
+      
+      if(options.length>=3){
+        // MCQ
+        type='mcq';cat='tn';pts=1;correctAnswer='a';
+        // Pad to 4 options
+        while(options.length<4)options.push({id:['a','b','c','d'][options.length],text:''});
+      } else if(qContent.match(/[Đđ][úu]ng\s*(hay|ho[ặa]c)\s*[Ss]ai/i)||qContent.match(/Đúng hay Sai/i)){
+        // True/False
+        type='true_false';cat='tn';pts=1;correctAnswer='true';
+        qContent=qContent.replace(/^[Đđ][úu]ng\s*(hay|ho[ặa]c)\s*[Ss]ai\s*[:.]?\s*/i,'Đúng hay Sai: ');
+      } else if(qContent.match(/_____/)||qContent.match(/\.\.\.\.\./)||qContent.match(/=\s*\?/)){
+        // Fill in
+        type='fill_in';cat='tn';pts=1;correctAnswer='';
+        qContent=qContent.replace(/\.{3,}/g,'_____');
+        if(!qContent.match(/_____/)&&qContent.match(/=\s*\?/)){
+          qContent=qContent.replace(/=\s*\?/,'= _____');
+        }
+      } else if(options.length===0&&qContent.length>30){
+        // Essay (long question, no options)
+        type='essay';cat='tl';pts=2;
+      } else if(options.length===0){
+        // Short question without options - could be fill_in
+        type='fill_in';cat='tn';pts=1;
+        if(!qContent.match(/_____/))qContent+=' = _____';
+      }
+      
+      var q={id:qId,type:type,cat:cat,order:qNum,points:pts,content:qContent,correctAnswer:correctAnswer};
+      if(type==='mcq')q.options=options;
+      if(type==='fill_in')q.hint='';
+      if(type==='essay')q.rubric=[{criteriaId:'r1',label:'Nội dung đúng',maxScore:1},{criteriaId:'r2',label:'Đáp số đúng',maxScore:0.5},{criteriaId:'r3',label:'Trình bày',maxScore:0.5}];
+      
+      questions.push(q);
+    }
+  }
+  
+  if(!questions.length){
+    showToast('⚠️ Không nhận diện được câu hỏi. Đảm bảo mỗi câu bắt đầu bằng "Câu 1:", "1.", "Bài 1"...');
+    return;
+  }
+  
+  // Auto-balance points to total 10
+  var tnCount=questions.filter(function(q){return q.cat==='tn';}).length;
+  var tlCount=questions.filter(function(q){return q.cat==='tl';}).length;
+  if(tnCount+tlCount>0){
+    var tnPts=tnCount?Math.round(6/tnCount*2)/2:0;// round to 0.5
+    var tlPts=tlCount?Math.round(4/tlCount*2)/2:0;
+    if(tnPts<0.5)tnPts=0.5;if(tlPts<0.5)tlPts=0.5;
+    questions.forEach(function(q){q.points=q.cat==='tn'?tnPts:tlPts;});
+  }
+  
+  T.examData={examId:'exam_parse_'+Date.now(),title:'Kiểm Tra '+CFG.semester+' - '+CFG.subject+' Lớp '+CFG.grade,questions:questions};
+  T.parsed=true;T.roomCode=null;T.editingQ=null;
+  showToast('✅ Đã nhận diện '+questions.length+' câu hỏi! (TN: '+tnCount+', TL: '+tlCount+') — GV kiểm tra lại đáp án!');
+  renderT();
+}
 
 function trigUpload(){
   var inp=document.createElement('input');inp.type='file';inp.accept='.pdf,.png,.jpg,.jpeg,.doc,.docx';
@@ -409,10 +587,10 @@ function renderT(){
   roomCodeHtml+
   '<div class="panel"><div class="panel-title">🏫 Thông tin bài kiểm tra</div><div class="cfg-form"><div class="cfg-f"><label>Tên trường</label><input value="'+CFG.schoolName+'" onchange="CFG.schoolName=this.value"></div><div class="cfg-row"><div class="cfg-f"><label>Giáo viên</label><input value="'+CFG.teacherName+'" onchange="CFG.teacherName=this.value"></div><div class="cfg-f"><label>Năm học</label><input value="'+CFG.schoolYear+'" onchange="CFG.schoolYear=this.value"></div></div><div class="cfg-row"><div class="cfg-f"><label>Môn học</label><select onchange="CFG.subject=this.value">'+subs.map(function(s){return'<option'+(CFG.subject===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select></div><div class="cfg-f"><label>Lớp</label><select onchange="CFG.grade=+this.value">'+[1,2,3,4,5].map(function(g){return'<option value="'+g+'"'+(CFG.grade===g?' selected':'')+'>'+g+'</option>';}).join('')+'</select></div></div><div class="cfg-row"><div class="cfg-f"><label>Kỳ kiểm tra</label><select onchange="CFG.semester=this.value">'+sems.map(function(s){return'<option'+(CFG.semester===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select></div><div class="cfg-f"><label>Thời gian (phút)</label><input type="number" value="'+Math.floor(CFG.duration/60)+'" onchange="CFG.duration=+this.value*60"></div></div></div></div>'+
   '<div class="panel" style="margin-top:16px"><div class="panel-title">👩‍🎓 Học sinh <span style="margin-left:auto;font-size:13px;color:var(--g500)">'+students.length+' em</span></div><div style="display:flex;gap:8px;margin-bottom:8px"><button style="padding:8px 16px;border-radius:10px;font-weight:800;font-size:12px;color:white;background:var(--g500)" onclick="T.showAddStudent=true;renderT();">➕ Thêm HS</button></div>'+addForm+'<div style="max-height:180px;overflow-y:auto"><table class="stu-table"><thead><tr><th>TT</th><th>Mã</th><th>Họ tên</th><th>NS</th><th>Lớp</th><th>Trường</th><th></th></tr></thead><tbody>'+stuRows+'</tbody></table></div></div>'+
-  '<div class="panel" style="margin-top:16px"><div class="panel-title">✏️ Biên soạn đề thi</div><div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap"><button style="padding:10px 16px;border-radius:10px;font-weight:800;font-size:12px;color:white;background:linear-gradient(135deg,var(--g500),var(--t500))" onclick="addQ(\'mcq\')">➕ Chọn ĐA</button><button style="padding:10px 16px;border-radius:10px;font-weight:800;font-size:12px;color:white;background:linear-gradient(135deg,var(--t500),var(--s500))" onclick="addQ(\'true_false\')">➕ Đúng/Sai</button><button style="padding:10px 16px;border-radius:10px;font-weight:800;font-size:12px;color:white;background:linear-gradient(135deg,var(--s500),#6366F1)" onclick="addQ(\'fill_in\')">➕ Điền khuyết</button><button style="padding:10px 16px;border-radius:10px;font-weight:800;font-size:12px;color:white;background:linear-gradient(135deg,#EC4899,#F43F5E)" onclick="addQ(\'essay\')">➕ Tự luận</button></div>'+
+  '<div class="panel" style="margin-top:16px"><div class="panel-title">✏️ Biên soạn đề thi</div><div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap"><button style="padding:10px 16px;border-radius:10px;font-weight:800;font-size:12px;color:white;background:linear-gradient(135deg,var(--g500),var(--t500))" onclick="addQ(\'mcq\')">➕ Chọn ĐA</button><button style="padding:10px 16px;border-radius:10px;font-weight:800;font-size:12px;color:white;background:linear-gradient(135deg,var(--t500),var(--s500))" onclick="addQ(\'true_false\')">➕ Đúng/Sai</button><button style="padding:10px 16px;border-radius:10px;font-weight:800;font-size:12px;color:white;background:linear-gradient(135deg,var(--s500),#6366F1)" onclick="addQ(\'fill_in\')">➕ Điền khuyết</button><button style="padding:10px 16px;border-radius:10px;font-weight:800;font-size:12px;color:white;background:linear-gradient(135deg,#EC4899,#F43F5E)" onclick="addQ(\'essay\')">➕ Tự luận</button><button style="padding:10px 16px;border-radius:10px;font-weight:800;font-size:12px;color:white;background:linear-gradient(135deg,#6366F1,#8B5CF6)" onclick="showImportModal()">📥 Nhập đề từ AI</button></div>'+
   (T.examData&&T.examData.questions.length?'<div style="padding:10px 14px;background:var(--g50);border-radius:10px;border:1px solid var(--g200);font-size:13px;font-weight:700;color:var(--g700)">📋 '+T.examData.questions.length+' câu | TN: '+T.examData.questions.filter(function(q){return q.cat==="tn";}).length+' | TL: '+T.examData.questions.filter(function(q){return q.cat==="tl";}).length+' | Tổng: '+T.examData.questions.reduce(function(s,q){return s+q.points;},0)+'đ</div>':'<div style="padding:14px;background:var(--a50);border-radius:10px;border:1px solid var(--a200);text-align:center;font-size:13px;font-weight:700;color:var(--a600)">💡 Bấm các nút trên để thêm câu hỏi</div>')+
   '</div>'+
-  '<div class="panel" style="margin-top:16px"><div class="panel-title">🧠 AI Biên Soạn Đề'+(T.aiStatus?'<span style="margin-left:auto;font-size:11px;font-weight:700;padding:3px 10px;border-radius:8px;'+(T.aiStatus==='success'?'background:var(--g100);color:var(--g700)':T.aiStatus==='error'?'background:var(--r50);color:var(--r500)':'background:var(--a50);color:var(--a600)')+'">'+T.aiMsg+'</span>':'')+'</div><div style="border:3px dashed '+(T.uploadFile?'var(--t400)':'var(--g300)')+';border-radius:16px;padding:'+(T.uploadFile?'20px':'30px')+';text-align:center;cursor:pointer;background:'+(T.uploadFile?'var(--t50)':'var(--g50)')+';transition:all .3s" onclick="trigUpload()" ondragover="event.preventDefault()" ondrop="event.preventDefault();handleDrop(event)">'+(T.uploadFile?'<div style="font-size:40px;margin-bottom:8px">📄</div><p style="font-size:16px;font-weight:800;color:var(--t600)">'+T.uploadFile.name+'</p><p style="font-size:12px;font-weight:600;color:var(--t500)">'+(T.uploadFile.size/1024).toFixed(0)+' KB</p><button style="margin-top:6px;color:var(--r400);font-size:12px;font-weight:700;background:none" onclick="event.stopPropagation();T.uploadFile=null;T.uploadObj=null;T.aiStatus=null;renderT();">✕ Xóa</button>':'<div style="font-size:48px;margin-bottom:10px">📎</div><p style="font-size:17px;font-weight:700;color:var(--g700)">Kéo thả file vào đây</p><p style="font-size:13px;font-weight:600;color:var(--g600)">PDF hoặc Ảnh chụp đề (PNG, JPG)</p>')+'</div>'+(T.uploadFile&&!T.aiParsing?'<button style="margin-top:10px;width:100%;padding:16px;border-radius:12px;font-size:16px;font-weight:800;color:white;display:flex;align-items:center;justify-content:center;gap:10px;background:linear-gradient(135deg,var(--g500),var(--t500));box-shadow:0 4px 16px rgba(16,185,129,.3)" onclick="parseWithAI()">🧠 Ong Vàng AI Phân Tích Đề</button>':'')+(T.aiParsing?'<div style="margin-top:10px;width:100%;padding:16px;border-radius:12px;font-size:16px;font-weight:800;color:white;display:flex;align-items:center;justify-content:center;gap:10px;background:linear-gradient(135deg,var(--g500),var(--t500));opacity:.7"><span class="spinner">⏳</span> Ong vàng đang đọc đề...</div>':'')+'<p style="font-size:11px;color:var(--g600);margin-top:8px;font-weight:600">🐝 AI đọc file đề → phân loại câu hỏi → tạo đáp án theo ma trận đề</p></div>'+
+  '<div class="panel" style="margin-top:16px"><div class="panel-title">🧠 AI Biên Soạn Đề'+(T.aiStatus?'<span style="margin-left:auto;font-size:11px;font-weight:700;padding:3px 10px;border-radius:8px;'+(T.aiStatus==='success'?'background:var(--g100);color:var(--g700)':T.aiStatus==='error'?'background:var(--r50);color:var(--r500)':'background:var(--a50);color:var(--a600)')+'">'+T.aiMsg+'</span>':'')+'</div><div style="border:3px dashed '+(T.uploadFile?'var(--t400)':'var(--g300)')+';border-radius:14px;padding:'+(T.uploadFile?'16px':'28px')+';text-align:center;cursor:pointer;background:'+(T.uploadFile?'var(--t50)':'var(--g50)')+'" onclick="trigUpload()" ondragover="event.preventDefault()" ondrop="event.preventDefault();handleDrop(event)">'+(T.uploadFile?'<p style="font-size:15px;font-weight:800;color:var(--t600)">📄 '+T.uploadFile.name+'</p><p style="font-size:12px;color:var(--t500)">'+(T.uploadFile.size/1024).toFixed(0)+' KB</p><button style="margin-top:4px;color:var(--r400);font-size:12px;font-weight:700;background:none" onclick="event.stopPropagation();T.uploadFile=null;T.uploadObj=null;T.aiStatus=null;T.aiMsg=String();renderT();">✕ Xóa</button>':'<div style="font-size:40px;margin-bottom:8px">📎</div><p style="font-size:16px;font-weight:700;color:var(--g700)">Tải file đề thi lên</p><p style="font-size:12px;font-weight:600;color:var(--g600)">PDF hoặc Ảnh chụp đề (PNG, JPG)</p>')+'</div>'+(T.uploadFile&&!T.aiParsing?'<button style="margin-top:10px;width:100%;padding:14px;border-radius:12px;font-size:15px;font-weight:800;color:white;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,var(--g500),var(--t500));box-shadow:0 4px 16px rgba(16,185,129,.3)" onclick="parseWithAI()">🧠 Ong Vàng AI Phân Tích Đề</button>':'')+(T.aiParsing?'<div style="margin-top:10px;width:100%;padding:14px;border-radius:12px;font-size:15px;font-weight:800;color:white;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,var(--g500),var(--t500));opacity:.7"><span class="spinner">⏳</span> Ong vàng đang đọc đề...</div>':'')+'<p style="font-size:11px;color:var(--g600);margin-top:8px;font-weight:600">🐝 AI đọc file → phân loại câu hỏi → tạo đáp án → GV kiểm tra</p></div>'+
   '</div><div style="animation:fadeIn .6s ease-out"><div class="panel" style="min-height:400px"><div class="panel-title">👁️ Xem trước & Chỉnh sửa</div>'+(!T.parsed?'<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:250px;color:var(--g300)"><div style="animation:floatBee 3s ease-in-out infinite;opacity:.6">'+B(64)+'</div><p style="margin-top:16px;font-size:16px;font-weight:700">Thêm câu hỏi để bắt đầu</p></div>':'<div style="max-height:600px;overflow-y:auto;padding-right:8px">'+T.examData.questions.map(function(q,i){return rTQ(q,i);}).join('')+'</div>')+'</div></div></div></div>';
 }
 
