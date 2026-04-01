@@ -358,52 +358,42 @@ function handleDrop(e){
 function parseWithAI(){
   if(!T.uploadObj){showToast('⚠️ Chưa tải file!');return;}
   T.aiParsing=true;T.aiStatus='parsing';T.aiMsg='Đang phân tích...';renderT();
-  
+  var GKEY='AIzaSyAJZe1egxJBkazZEF-be32XPBKaRPej95E';
   var reader=new FileReader();
   reader.onload=function(e){
     var base64=e.target.result.split(',')[1];
     var ext=T.uploadFile.name.split('.').pop().toLowerCase();
-    var mtype='image/png';
-    if(ext==='pdf')mtype='application/pdf';
-    else if(ext==='jpg'||ext==='jpeg')mtype='image/jpeg';
-    else if(ext==='png')mtype='image/png';
-    
-    fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify({action:'parseExam',fileBase64:base64,mediaType:mtype,fileName:T.uploadFile.name})
-    }).then(function(r){return r.json();}).then(function(data){
+    var mtype=(ext==='pdf')?'application/pdf':(ext==='jpg'||ext==='jpeg')?'image/jpeg':'image/png';
+    var parts=[{inlineData:{mimeType:mtype,data:base64}},{text:'Ban la chuyen gia bien soan de kiem tra tieu hoc Viet Nam. Doc ky de thi va trich xuat TOAN BO cau hoi thanh JSON.\nPHAN LOAI: Chon A/B/C/D -> type:mcq,cat:tn. Dung/Sai -> type:true_false,cat:tn. Dien ket qua -> type:fill_in,cat:tn (dung _____ cho cho trong). Tu luan/giai toan/dat tinh roi tinh -> type:essay,cat:tl.\nDIEM: Giu nguyen diem trong de. Neu khong co: tong=10d.\nNOI DUNG: Giu nguyen goc. Phan so viet {tu/mau}. Dat tinh roi tinh -> essay. Nhieu phep tinh con -> giu chung 1 cau. Tu luan PHAI co rubric.\nDAP AN: Xac dinh dap an dung cho MCQ, D/S, Dien khuyet.\nTra ve CHI JSON, KHONG markdown, KHONG backtick:\n{"title":"...","subject":"...","grade":5,"questions":[{"id":"q1","type":"mcq","cat":"tn","order":1,"points":1,"content":"noi dung cau hoi","options":[{"id":"a","text":"..."},{"id":"b","text":"..."},{"id":"c","text":"..."},{"id":"d","text":"..."}],"correctAnswer":"b"},{"id":"q2","type":"essay","cat":"tl","order":2,"points":2,"content":"noi dung","rubric":[{"criteriaId":"r1","label":"Phep tinh dung","maxScore":1},{"criteriaId":"r2","label":"Dap so","maxScore":0.5},{"criteriaId":"r3","label":"Trinh bay","maxScore":0.5}]}]}'}];
+    fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+GKEY,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contents:[{parts:parts}],generationConfig:{temperature:0.1,maxOutputTokens:4096,thinkingConfig:{thinkingBudget:0}}})
+    }).then(function(r){return r.json();}).then(function(resp){
       T.aiParsing=false;
-      if(data.error){
-        T.aiStatus='error';
-        if(data.error.indexOf('429')>=0||data.error.indexOf('quota')>=0||data.error.indexOf('Quota')>=0){
-          T.aiMsg='⏳ AI đang bận, thử lại sau 1 phút';
-        }else{
-          T.aiMsg=data.error;
-        }
-        renderT();return;
-      }
-      if(!data.questions||!data.questions.length){
-        T.aiStatus='error';T.aiMsg='Không tìm thấy câu hỏi trong file';renderT();return;
-      }
-      // Success! Normalize questions
+      if(resp.error){T.aiStatus='error';T.aiMsg=resp.error.message||'Loi AI';renderT();return;}
+      var allP=resp.candidates[0].content.parts;
+      var text='';for(var p=0;p<allP.length;p++){if(allP[p].text)text+=allP[p].text;}
+      text=text.replace(/```json|```/g,'').trim();
+      var js=text.indexOf('{'),je=text.lastIndexOf('}');
+      if(js>=0)text=text.substring(js,je+1);
+      var data=JSON.parse(text);
+      if(!data.questions||!data.questions.length){T.aiStatus='error';T.aiMsg='Khong tim thay cau hoi';renderT();return;}
       var qs=data.questions.map(function(q,i){
-        var type=q.type||'essay';
-        var cat=(type==='mcq'||type==='true_false'||type==='fill_in')?'tn':'tl';
-        var normalized={id:q.id||('q'+(i+1)),type:type,cat:cat,order:q.order||(i+1),points:q.points||1,content:q.content||q.question||q.text||'(Chưa có nội dung)',correctAnswer:q.correctAnswer||q.answer||''};
-        if(type==='mcq'){normalized.options=q.options||[{id:'a',text:'A'},{id:'b',text:'B'},{id:'c',text:'C'},{id:'d',text:'D'}];}
-        if(type==='fill_in'){normalized.hint=q.hint||'';}
-        if(type==='essay'||cat==='tl'){normalized.rubric=q.rubric||[{criteriaId:'r1',label:'Nội dung đúng',maxScore:1},{criteriaId:'r2',label:'Đáp số',maxScore:0.5},{criteriaId:'r3',label:'Trình bày',maxScore:0.5}];}
-        return normalized;
+        var type=q.type||'essay';var cat=(type==='mcq'||type==='true_false'||type==='fill_in')?'tn':'tl';
+        var n={id:q.id||('q'+(i+1)),type:type,cat:cat,order:q.order||(i+1),points:q.points||1,content:q.content||q.question||q.text||'',correctAnswer:q.correctAnswer||q.answer||''};
+        if(type==='mcq'){n.options=q.options||[{id:'a',text:'A'},{id:'b',text:'B'},{id:'c',text:'C'},{id:'d',text:'D'}];}
+        if(type==='fill_in'){n.hint=q.hint||'';}
+        if(type==='essay'||cat==='tl'){n.rubric=q.rubric||[{criteriaId:'r1',label:'Noi dung dung',maxScore:1},{criteriaId:'r2',label:'Dap so',maxScore:0.5},{criteriaId:'r3',label:'Trinh bay',maxScore:0.5}];}
+        return n;
       });
-      T.examData={examId:'exam_ai_'+Date.now(),title:data.title||('KT '+CFG.semester+' - '+CFG.subject+' Lớp '+CFG.grade),questions:qs};
+      T.examData={examId:'exam_ai_'+Date.now(),title:data.title||('KT '+CFG.semester+' - '+CFG.subject+' Lop '+CFG.grade),questions:qs};
       if(data.subject)CFG.subject=data.subject;
-      if(data.grade)CFG.grade=data.grade;
+      if(data.grade)CFG.grade=+data.grade||CFG.grade;
       T.parsed=true;T.roomCode=null;
-      T.aiStatus='success';T.aiMsg='✅ '+data.questions.length+' câu hỏi!';
-      showToast('🐝 Ong vàng đã phân tích thành công '+data.questions.length+' câu!');
+      T.aiStatus='success';T.aiMsg='OK '+qs.length+' cau!';
+      showToast('Thanh cong! '+qs.length+' cau hoi');
       renderT();
-    }).catch(function(err){
-      T.aiParsing=false;T.aiStatus='error';T.aiMsg='Lỗi kết nối: '+err.message;renderT();
-    });
+    }).catch(function(err){T.aiParsing=false;T.aiStatus='error';T.aiMsg='Loi: '+err.message;renderT();});
   };
   reader.readAsDataURL(T.uploadObj);
 }
