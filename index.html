@@ -376,7 +376,13 @@ function parseWithAI(){
       text=text.replace(/```json|```/g,'').trim();
       var js=text.indexOf('{'),je=text.lastIndexOf('}');
       if(js>=0)text=text.substring(js,je+1);
-      var data=JSON.parse(text);
+      var data;try{data=JSON.parse(text);}catch(pe){
+        var m=pe.message.match(/position (\d+)/);
+        if(m){text=text.substring(0,parseInt(m[1]));
+          var je2=text.lastIndexOf('}');if(je2>0)text=text.substring(0,je2+1);
+          data=JSON.parse(text);
+        }else{throw pe;}
+      }
       if(!data.questions||!data.questions.length){T.aiStatus='error';T.aiMsg='Khong tim thay cau hoi';renderT();return;}
       var qs=data.questions.map(function(q,i){
         var type=q.type||'essay';var cat=(type==='mcq'||type==='true_false'||type==='fill_in')?'tn':'tl';
