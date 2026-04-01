@@ -358,31 +358,16 @@ function handleDrop(e){
 function parseWithAI(){
   if(!T.uploadObj){showToast('⚠️ Chưa tải file!');return;}
   T.aiParsing=true;T.aiStatus='parsing';T.aiMsg='Đang phân tích...';renderT();
-  var GKEY='AIzaSyAJZe1egxJBkazZEF-be32XPBKaRPej95E';
   var reader=new FileReader();
   reader.onload=function(e){
     var base64=e.target.result.split(',')[1];
     var ext=T.uploadFile.name.split('.').pop().toLowerCase();
     var mtype=(ext==='pdf')?'application/pdf':(ext==='jpg'||ext==='jpeg')?'image/jpeg':'image/png';
-    var parts=[{inlineData:{mimeType:mtype,data:base64}},{text:'Ban la chuyen gia bien soan de kiem tra tieu hoc Viet Nam. Doc ky de thi va trich xuat TOAN BO cau hoi thanh JSON.\nPHAN LOAI: Chon A/B/C/D -> type:mcq,cat:tn. Dung/Sai -> type:true_false,cat:tn. Dien ket qua -> type:fill_in,cat:tn (dung _____ cho cho trong). Tu luan/giai toan/dat tinh roi tinh -> type:essay,cat:tl.\nDIEM: Giu nguyen diem trong de. Neu khong co: tong=10d.\nNOI DUNG: Giu nguyen goc. Phan so viet {tu/mau}. Dat tinh roi tinh -> essay. Nhieu phep tinh con -> giu chung 1 cau. Tu luan PHAI co rubric.\nDAP AN: Xac dinh dap an dung cho MCQ, D/S, Dien khuyet.\nTra ve CHI JSON, KHONG markdown, KHONG backtick:\n{"title":"...","subject":"...","grade":5,"questions":[{"id":"q1","type":"mcq","cat":"tn","order":1,"points":1,"content":"noi dung cau hoi","options":[{"id":"a","text":"..."},{"id":"b","text":"..."},{"id":"c","text":"..."},{"id":"d","text":"..."}],"correctAnswer":"b"},{"id":"q2","type":"essay","cat":"tl","order":2,"points":2,"content":"noi dung","rubric":[{"criteriaId":"r1","label":"Phep tinh dung","maxScore":1},{"criteriaId":"r2","label":"Dap so","maxScore":0.5},{"criteriaId":"r3","label":"Trinh bay","maxScore":0.5}]}]}'}];
-    fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+GKEY,{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({contents:[{parts:parts}],generationConfig:{temperature:0.1,maxOutputTokens:4096,thinkingConfig:{thinkingBudget:0}}})
-    }).then(function(r){return r.json();}).then(function(resp){
+    fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'parseExam',fileBase64:base64,mediaType:mtype,fileName:T.uploadFile.name})
+    }).then(function(r){return r.json();}).then(function(data){
       T.aiParsing=false;
-      if(resp.error){T.aiStatus='error';T.aiMsg=resp.error.message||'Loi AI';renderT();return;}
-      var allP=resp.candidates[0].content.parts;
-      var text='';for(var p=0;p<allP.length;p++){if(allP[p].text)text+=allP[p].text;}
-      text=text.replace(/```json|```/g,'').trim();
-      var js=text.indexOf('{'),je=text.lastIndexOf('}');
-      if(js>=0)text=text.substring(js,je+1);
-      var data;try{data=JSON.parse(text);}catch(pe){
-        var m=pe.message.match(/position (\d+)/);
-        if(m){text=text.substring(0,parseInt(m[1]));
-          var je2=text.lastIndexOf('}');if(je2>0)text=text.substring(0,je2+1);
-          data=JSON.parse(text);
-        }else{throw pe;}
-      }
+      if(data.error){T.aiStatus='error';T.aiMsg=data.error;renderT();return;}
       if(!data.questions||!data.questions.length){T.aiStatus='error';T.aiMsg='Khong tim thay cau hoi';renderT();return;}
       var qs=data.questions.map(function(q,i){
         var type=q.type||'essay';var cat=(type==='mcq'||type==='true_false'||type==='fill_in')?'tn':'tl';
