@@ -384,8 +384,17 @@ function parseWithAI(){
       if(!data.questions||!data.questions.length){
         T.aiStatus='error';T.aiMsg='Không tìm thấy câu hỏi trong file';renderT();return;
       }
-      // Success! Populate exam
-      T.examData={examId:'exam_ai_'+Date.now(),title:data.title||('KT '+CFG.semester+' - '+CFG.subject+' Lớp '+CFG.grade),questions:data.questions};
+      // Success! Normalize questions
+      var qs=data.questions.map(function(q,i){
+        var type=q.type||'essay';
+        var cat=(type==='mcq'||type==='true_false'||type==='fill_in')?'tn':'tl';
+        var normalized={id:q.id||('q'+(i+1)),type:type,cat:cat,order:q.order||(i+1),points:q.points||1,content:q.content||q.question||q.text||'(Chưa có nội dung)',correctAnswer:q.correctAnswer||q.answer||''};
+        if(type==='mcq'){normalized.options=q.options||[{id:'a',text:'A'},{id:'b',text:'B'},{id:'c',text:'C'},{id:'d',text:'D'}];}
+        if(type==='fill_in'){normalized.hint=q.hint||'';}
+        if(type==='essay'||cat==='tl'){normalized.rubric=q.rubric||[{criteriaId:'r1',label:'Nội dung đúng',maxScore:1},{criteriaId:'r2',label:'Đáp số',maxScore:0.5},{criteriaId:'r3',label:'Trình bày',maxScore:0.5}];}
+        return normalized;
+      });
+      T.examData={examId:'exam_ai_'+Date.now(),title:data.title||('KT '+CFG.semester+' - '+CFG.subject+' Lớp '+CFG.grade),questions:qs};
       if(data.subject)CFG.subject=data.subject;
       if(data.grade)CFG.grade=data.grade;
       T.parsed=true;T.roomCode=null;
